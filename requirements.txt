@@ -1,0 +1,11 @@
+einops
+jiwer
+Levenshtein
+loguru
+matplotlib
+numpy
+PyYAML
+scipy
+thop
+# torch
+umap-learn

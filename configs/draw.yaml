@@ -1,0 +1,20 @@
+arch_de: bilstm_b
+arch_en: blconv_b
+arch_pool: attn_gated
+arch_txt: trans_rms_gated
+aug: false # whether to perform data augmentation for train set
+cache: false # whether to cache the whole dataset into rams
+checkpoint: ../results/echwr/rewi/rewi_b_rms_gated__bc_ec2__onhw_words500_wd_word_rh/0/checkpoints/267.pth
+device: cuda
+dir_dataset: ../data/echwr/onhw_words500_wd_word_rh
+dir_work: ../results/echwr/rewi/rewi_b_rms_gated__bc_ec2__onhw_words500_wd_word_rh
+idx_fold: 0
+len_context: 64
+num_channel: 13
+num_corr_txt: 2
+num_worker: 1
+seed: 42
+size_batch: 1
+title: "UMAP w/ EC on WD"
+
+categories: ["", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z", "Ä", "Ö", "Ü", "a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m", "n", "o", "p", "q", "r", "s", "t", "u", "v", "w", "x", "y", "z", "ä", "ö", "ü", "ß"] # including seperation label "" for CTC

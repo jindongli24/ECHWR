@@ -1,0 +1,30 @@
+arch_de: bilstm_b
+arch_en: blconv_b
+arch_pool: attn_gated
+arch_txt: trans_rms_gated
+aug: true # whether to perform data augmentation for train set
+cache: true # whether to cache the whole dataset into rams
+checkpoint: null
+device: cuda
+dir_dataset: ../data/echwr/onhw_words500_wd_word_rh
+dir_work: ../results/echwr/rewi/rewi_b_rms_gated__bc_ec2__onhw_words500_wd_word_rh
+epoch: 300
+epoch_warmup: 30
+freq_eval: 1 # frequency (epoch) to evaulate model performance on val set
+freq_log: 300 # frequency (iteration) to log information
+freq_save: 1 # frequency (epoch) to save model checkpoint
+idx_fold: 0 # cross validation fold index. 0 for non-cross validation. -1 for train for all cross-validation folds automatically
+len_seq: 0 # 0 if no limitation
+len_context: 64
+lr: 0.001
+lr_trans: 0.00025 # usually 1/4 of the main lr
+num_channel: 13
+num_corr_txt: 2 # number of sets of random error text sequences. each set contains 3 error sequences
+num_worker: 16
+seed: 42
+size_batch: 64
+tasks: ["hwr", "bc", "ec"] # training tasks: hwr (handwriting recognition), bc (in-batch contrastive learning), ec (error-based contrastive learning)
+# tasks: ["hwr", "bc"]
+test: false
+
+categories: ["", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z", "Ä", "Ö", "Ü", "a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m", "n", "o", "p", "q", "r", "s", "t", "u", "v", "w", "x", "y", "z", "ä", "ö", "ü", "ß"] # including seperation label "" for CTC
