@@ -6,25 +6,29 @@ from glob import glob
 import numpy as np
 import torch
 import yaml
+from scipy import stats
 from thop import profile
 
+from echwr.loss import ECHWRLoss
 from echwr.model import ECHWR
 
 
-def get_mean_std_cv(cfgs: dict, results: dict = {}) -> dict:
-    '''Calculates statistics for cross-validation results.
+def get_mean_ci_cv(
+    cfgs: dict, results: dict = None, confidence: float = 0.95
+) -> dict:
+    '''calculates mean and confidence interval for cv results.
 
-    Iterates through result JSON files in the work directory, extracts the
-    best Character Error Rate (CER) and Word Error Rate (WER), and computes
-    mean and standard deviation.
+    iterates through result json files in the work directory, extracts the
+    best character error rate (cer) and word error rate (wer), and computes
+    mean and confidence interval bounds.
 
     Args:
-        cfgs: Configuration dictionary containing 'dir_work' and 'test' keys.
-        results: Dictionary to append results to. Defaults to {}.
+        cfgs: configuration dict with 'dir_work' and 'test' keys.
+        results: dict to append results to. defaults to an empty dict.
+        confidence: the confidence level to calculate. defaults to 0.95.
 
     Returns:
-        Updated dictionary containing 'cer' and 'wer' statistics (raw, mean,
-        std).
+        updated dictionary containing 'cer' and 'wer' statistics.
     '''
     cer, wer = {}, {}
 
@@ -48,17 +52,29 @@ def get_mean_std_cv(cfgs: dict, results: dict = {}) -> dict:
             cer[str(i)] = result_best['character_error_rate']
             wer[str(i)] = result_best['word_error_rate']
 
-        results['cer'] = {
-            'raw': cer,
-            'mean': np.mean(list(cer.values())).item(),
-            'std': np.std(list(cer.values())).item(),
-        }
-        results['wer'] = {
-            'raw': wer,
-            'mean': np.mean(list(wer.values())).item(),
-            'std': np.std(list(wer.values())).item(),
-        }
-        results = {k: v for k, v in sorted(results.items())}
+        if len(cer) > 1:
+            # calculate the t-critical value for n-1 degrees of freedom
+            t_crit = stats.t.ppf((1 + confidence) / 2, len(cer) - 1)
+
+            vals_c, vals_w = list(cer.values()), list(wer.values())
+            mean_c, mean_w = np.mean(vals_c).item(), np.mean(vals_w).item()
+            std_c, std_w = np.std(vals_c).item(), np.std(vals_w).item()
+
+            h_c = float(stats.sem(vals_c) * t_crit)
+            h_w = float(stats.sem(vals_w) * t_crit)
+
+            results['cer'] = {
+                'raw': cer,
+                'mean': mean_c,
+                'std': std_c,
+                'ci': h_c,
+            }
+            results['wer'] = {
+                'raw': wer,
+                'mean': mean_w,
+                'std': std_w,
+                'ci': h_w,
+            }
 
     return results
 
@@ -85,22 +101,134 @@ def get_macs_params(cfgs: dict, results: dict = {}) -> dict:
         cfgs['arch_txt'],
         cfgs['num_channel'],
         len(cfgs['categories']),
+        len_seq=cfgs['len_seq'],
     ).eval()
 
     # generate dummy input based on dataset type
-    x = torch.randn(
-        1, cfgs['num_channel'], 1024 if 'word' in cfgs['dir_dataset'] else 4096
+    x_ts = torch.randn(
+        1,
+        cfgs['num_channel'],
+        (
+            1024
+            if 'word' in cfgs['dir_dataset']
+            or 'equation' in cfgs['dir_dataset']
+            else 4096
+        ),
     )
-    macs, params = profile(model, inputs=(x,))
+    x_txt = torch.randint(
+        0,
+        len(cfgs['categories']) - 1,
+        (1 + cfgs['num_corr_txt'], 1, cfgs['len_context']),
+    )
+    macs_train, params_train = profile(
+        model,
+        inputs=(
+            x_ts,
+            x_txt,
+            cfgs['tasks'],
+        ),
+    )
+    macs_infer, params_infer = profile(model, inputs=(x_ts,))
 
-    results['macs'] = int(macs)
-    results['params'] = int(params)
-    results = {k: v for k, v in sorted(results.items())}
+    results['params'] = {
+        'train': int(params_train),
+        'infer': int(params_infer),
+    }
+    results['macs'] = {'train': int(macs_train), 'infer': int(macs_infer)}
 
     return results
 
 
-def main(path_cfg: str) -> None:
+def get_train_metrics(
+    cfgs: dict, results: dict = {}, num_iters: int = 100
+) -> dict:
+    '''Calculates training iteration time.
+
+    Benchmarks a dummy forward and backward pass using CUDA events
+    to estimate the true time per training iteration.
+
+    Args:
+        cfgs: Configuration dictionary containing architecture details.
+        results: Dictionary to append results to. Defaults to {}.
+        num_iters: Iterations for the benchmark. Defaults to 100.
+
+    Returns:
+        Updated dictionary containing 'time_per_iter'.
+    '''
+    model = (
+        ECHWR(
+            cfgs['arch_en'],
+            cfgs['arch_de'],
+            cfgs['arch_pool'],
+            cfgs['arch_txt'],
+            cfgs['num_channel'],
+            len(cfgs['categories']),
+            len_context=cfgs['len_context'],
+            len_seq=cfgs['len_seq'],
+        )
+        .train()
+        .cuda()
+    )
+
+    len_seq = (
+        1024
+        if 'word' in cfgs['dir_dataset'] or 'equation' in cfgs['dir_dataset']
+        else 4096
+    )
+    x_ts = torch.randn(1, cfgs['num_channel'], len_seq).cuda()
+    x_txt = torch.randint(
+        0,
+        len(cfgs['categories']) - 1,
+        (1 + cfgs['num_corr_txt'], 1, cfgs['len_context']),
+    ).cuda()
+
+    fn_loss = ECHWRLoss()
+
+    # warm-up runs to stabilize hardware timings
+    for _ in range(5):
+        model.zero_grad()
+        out = model(x_ts, x_txt, cfgs['tasks'])
+        loss = fn_loss(
+            out,
+            x_txt[0],
+            cfgs['tasks'],
+            (int(len_seq // model.ratio_ds),),
+            (int(cfgs['len_context']),),
+            model.scale,
+        )
+        loss.backward()
+
+    # cuda events for accurate hardware timing
+    start_event = torch.cuda.Event(enable_timing=True)
+    end_event = torch.cuda.Event(enable_timing=True)
+
+    # benchmark loop
+    start_event.record()
+    for _ in range(num_iters):
+        model.zero_grad()
+        out = model(x_ts, x_txt, cfgs['tasks'])
+        loss = fn_loss(
+            out,
+            x_txt[0],
+            cfgs['tasks'],
+            (int(len_seq // model.ratio_ds),),
+            (int(cfgs['len_context']),),
+            model.scale,
+        )
+        loss.backward()
+    end_event.record()
+
+    # force cpu to wait for gpu to finish all tasks
+    torch.cuda.synchronize()
+
+    # elapsed_time returns milliseconds, convert to seconds
+    total_time_sec = start_event.elapsed_time(end_event)
+    results['time_per_iter'] = total_time_sec / num_iters
+
+    return results
+
+
+def main(path_cfg: str, tt: bool = False) -> None:
     '''Main execution routine for single-experiment evaluation.
 
     Loads configuration, creates work directories, calculates cross-validation
@@ -109,6 +237,7 @@ def main(path_cfg: str) -> None:
 
     Args:
         path_cfg: Path to the configuration YAML file.
+        tt: Whether to calculate the training time. Defaults to False.
     '''
     with open(path_cfg, 'r') as f:
         cfgs = yaml.safe_load(f)
@@ -123,46 +252,15 @@ def main(path_cfg: str) -> None:
     else:
         results = {}
 
-    results = get_mean_std_cv(cfgs, results)
+    results = get_mean_ci_cv(cfgs, results)
     results = get_macs_params(cfgs, results)
 
+    if tt:
+        results = get_train_metrics(cfgs, results)
+    else:
+        results['time_per_iter'] = None
+
     with open(path_results, 'w') as f:
-        json.dump(results, f)
-
-    print(results)
-
-
-def main_ac(dir_work: str) -> None:
-    '''Aggregates evaluation results across multiple dataset directories.
-
-    Summarizes CER and WER across different sub-experiments (assumed to be
-    split by folds 0-4) found within the work directory.
-
-    Args:
-        dir_work: Path to the root work directory containing sub-experiment
-            folders.
-    '''
-    cer, wer = {'raw': {}}, {'raw': {}}
-
-    for fname in glob(os.path.join(dir_work, '*', 'results.json')):
-        with open(fname, 'r') as f:
-            result = json.load(f)
-
-        idx_1 = os.path.basename(os.path.dirname(fname))
-
-        for idx_2 in ['0', '1', '2', '3', '4']:
-            # check if fold data exists before accessing to avoid keyerror
-            if idx_2 in result['cer']['raw']:
-                cer['raw'][f'{idx_1}{idx_2}'] = result['cer']['raw'][idx_2]
-                wer['raw'][f'{idx_1}{idx_2}'] = result['wer']['raw'][idx_2]
-
-    cer['mean'] = np.mean(list(cer['raw'].values())).item()
-    cer['std'] = np.std(list(cer['raw'].values())).item()
-    wer['mean'] = np.mean(list(wer['raw'].values())).item()
-    wer['std'] = np.std(list(wer['raw'].values())).item()
-    results = {'cer': cer, 'wer': wer}
-
-    with open(os.path.join(dir_work, 'results.json'), 'w') as f:
         json.dump(results, f)
 
     print(results)
@@ -175,9 +273,12 @@ if __name__ == '__main__':
     parser.add_argument(
         '-c', '--config', help='Path to YAML file of configuration.'
     )
+    parser.add_argument(
+        '-tt',
+        '--training-time',
+        action='store_true',
+        help='Whether to calculate the training time.',
+    )
     args = parser.parse_args()
 
-    if os.path.isfile(args.config):
-        main(args.config)
-    elif os.path.isdir(args.config):
-        main_ac(args.config)
+    main(args.config, args.training_time)

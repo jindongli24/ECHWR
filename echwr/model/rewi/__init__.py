@@ -1,8 +1,10 @@
 import torch
 import torch.nn as nn
 
-from .conv import BLConv
 from .bilstm import BiLSTM
+from .conv import BLConv
+from .others.swinv2 import SwinTransformerV2
+from .others.convnext import ConvNeXt
 
 __all__ = ['BaseModel']
 
@@ -12,11 +14,9 @@ def build_encoder(in_chan: int, arch: str, len_seq: int = 0) -> nn.Module:
 
     Args:
         in_chan: Number of input channels.
-        arch: Encoder architecture key. Must be one of:
-            * 'blconv_b': Base BLConv model.
-            * 'blconv_s': Small BLConv model (fewer layers/channels).
-        len_seq: Expected length of the input sequence.
-            Defaults to 0.
+        arch: Encoder architecture key. Supported: 'blconv_b', 'blconv_s',
+            'convnext', 'swinv2', 'abla_1', 'abla_2', and 'abla_3'.
+        len_seq: Expected length of the input sequence. Defaults to 0.
 
     Returns:
         An initialized encoder module (nn.Module).
@@ -29,6 +29,16 @@ def build_encoder(in_chan: int, arch: str, len_seq: int = 0) -> nn.Module:
             return BLConv(in_chan)
         case 'blconv_s':
             return BLConv(in_chan, [1, 1, 1], [64, 128, 256])
+        case 'convnext':
+            return ConvNeXt(in_chan)
+        case 'swinv2':
+            return SwinTransformerV2(in_chan, len_seq)
+        case 'abla_1': # id capacity 2
+            return BLConv(in_chan, [2, 2, 2], [64, 128, 256])
+        case 'abla_2': # id capacity 3
+            return BLConv(in_chan, [3, 3, 3], [64, 128, 256])
+        case 'abla_3': # id capacity 4
+            return BLConv(in_chan, [1, 1, 1])
         case _:
             raise ValueError(
                 f'Unknown encoder architecture: "{arch}". '

@@ -24,7 +24,6 @@ num_worker: 16
 seed: 42
 size_batch: 64
 tasks: ["hwr", "bc", "ec"] # training tasks: hwr (handwriting recognition), bc (in-batch contrastive learning), ec (error-based contrastive learning)
-# tasks: ["hwr", "bc"]
 test: false
 
 categories: ["", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z", "Ä", "Ö", "Ü", "a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m", "n", "o", "p", "q", "r", "s", "t", "u", "v", "w", "x", "y", "z", "ä", "ö", "ü", "ß"] # including seperation label "" for CTC

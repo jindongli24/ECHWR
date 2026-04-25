@@ -138,20 +138,29 @@ def plot_umap(
     plt.figure(figsize=(10, 10))
     ax = uplt.points(reducer, labels=labels_all, color_key=color_key)
 
+    legend = ax.get_legend()
+    if legend:
+        ax.legend(
+            legend.legend_handles,
+            [t.get_text() for t in legend.get_texts()],
+            loc='upper left',
+            fontsize=16,
+        )
+
     if sum(mask_txt):
         ax.scatter(
             embeds_txt_umap[:, 0],
             embeds_txt_umap[:, 1],
             s=500,
             color=[color_key[label] for label in labels_txt],
-            alpha=0.2,
+            alpha=0.3,
         )
 
-    plt.title(title)
+    plt.title(title, fontsize=20)
     plt.tight_layout()
 
     if path_save:
-        plt.savefig(path_save, dpi=1000)
+        plt.savefig(path_save, dpi=300)
     else:
         plt.savefig('umap.png')
 
