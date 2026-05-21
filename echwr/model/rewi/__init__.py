@@ -15,7 +15,8 @@ def build_encoder(in_chan: int, arch: str, len_seq: int = 0) -> nn.Module:
     Args:
         in_chan: Number of input channels.
         arch: Encoder architecture key. Supported: 'blconv_b', 'blconv_s',
-            'convnext', 'swinv2', 'abla_1', 'abla_2', and 'abla_3'.
+            'convnext', 'swinv2', 'vit', 'blconv_s_d2', 'blconv_s_d3', and
+            'blconv_b_d1'.
         len_seq: Expected length of the input sequence. Defaults to 0.
 
     Returns:
@@ -33,11 +34,11 @@ def build_encoder(in_chan: int, arch: str, len_seq: int = 0) -> nn.Module:
             return ConvNeXt(in_chan)
         case 'swinv2':
             return SwinTransformerV2(in_chan, len_seq)
-        case 'abla_1': # id capacity 2
+        case 'blconv_s_d2':
             return BLConv(in_chan, [2, 2, 2], [64, 128, 256])
-        case 'abla_2': # id capacity 3
+        case 'blconv_s_d3':
             return BLConv(in_chan, [3, 3, 3], [64, 128, 256])
-        case 'abla_3': # id capacity 4
+        case 'blconv_b_d1':
             return BLConv(in_chan, [1, 1, 1])
         case _:
             raise ValueError(
