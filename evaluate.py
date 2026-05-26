@@ -245,12 +245,7 @@ def main(path_cfg: str, tt: bool = False) -> None:
     os.makedirs(cfgs['dir_work'], exist_ok=True)
 
     path_results = os.path.join(cfgs['dir_work'], 'results.json')
-
-    if os.path.isfile(path_results):
-        with open(path_results, 'r') as f:
-            results = json.load(f)
-    else:
-        results = {}
+    results = {}
 
     results = get_mean_ci_cv(cfgs, results)
     results = get_macs_params(cfgs, results)
