@@ -1,6 +1,6 @@
 # Enhancing IMU-Based Online Handwriting Recognition via Contrastive Learning with Zero Inference Overhead
 
-This repository contains the official implementation of the paper **"Enhancing IMU-Based Online Handwriting Recognition via Contrastive Learning with Zero Inference Overhead"**.
+This repository contains the official implementation of our paper, [**"Enhancing IMU-Based Online Handwriting Recognition via Contrastive Learning with Zero Inference Overhead"**](https://arxiv.org/abs/2602.07049), accepted for presentation at the **20th International Conference on Document Analysis and Recognition (ICDAR 2026)**.
 
 ## Introduction
 
